@@ -8,6 +8,9 @@
 */
 
 using System;
+using System.Linq.Expressions;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace AsyncAwait.Task1.CancellationTokens;
 
@@ -29,6 +32,7 @@ internal class Program
         var input = Console.ReadLine();
         while (input.Trim().ToUpper() != "Q")
         {
+            
             if (int.TryParse(input, out var n))
             {
                 CalculateSum(n);
@@ -42,20 +46,51 @@ internal class Program
             input = Console.ReadLine();
         }
 
-        Console.WriteLine("Press any key to continue");
-        Console.ReadLine();
+        Console.WriteLine("The Application has been stopped");
     }
 
     private static void CalculateSum(int n)
     {
-        // todo: make calculation asynchronous
-        var sum = Calculator.Calculate(n);
-        Console.WriteLine($"Sum for {n} = {sum}.");
-        Console.WriteLine();
-        Console.WriteLine("Enter N: ");
-        // todo: add code to process cancellation and uncomment this line    
-        // Console.WriteLine($"Sum for {n} cancelled...");
+        CancellationTokenSource tokenSource = new CancellationTokenSource();
+        var token = tokenSource.Token;
+        try
+        {
+            
+            var sum = Calculator.CalculateAsync(n, token);
+            Thread t1 = new Thread(() => {
+                if (Console.ReadKey(true).KeyChar.ToString().ToUpperInvariant().Equals("N"))
+                {
+                    tokenSource.Cancel();
+                }
+            });
+            t1.Start();
+            Console.WriteLine($"The task for {n} started... Enter N to cancel the request:");
 
-        Console.WriteLine($"The task for {n} started... Enter N to cancel the request:");
+            Console.WriteLine($"Sum for {n} = {sum.Result}.");
+            Console.WriteLine();
+            Console.WriteLine("Enter N: ");
+            
+        }
+        catch (AggregateException ex)
+        {
+            foreach (var e in ex.InnerExceptions)
+                if (e is TaskCanceledException)
+                {
+
+                    Console.WriteLine($"Sum for {n} cancelled...");
+                    Console.WriteLine("Enter another value to continue: ");
+                }
+                else
+                {
+                    Console.WriteLine("Unexpected error occured. Error message: ");
+                    Console.WriteLine("   {0}: {1}", e.GetType().Name, e.Message);
+                }
+                
+        }
+        finally
+        {
+            tokenSource.Dispose();
+        }
+        
     }
 }
